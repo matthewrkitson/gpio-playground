@@ -8,8 +8,6 @@ import threading
 
 from log import logger
 
-buzzer = gpiozero.TonalBuzzer(2)
-
 green = gpiozero.PWMLED(14)
 yellow = gpiozero.PWMLED(18)
 orange = gpiozero.PWMLED(23)
@@ -32,6 +30,8 @@ tilt2 = gpiozero.Button(4)
 
 ldr = gpiozero.LightSensor(10)
 pot = gpiozero.LightSensor(11)
+
+buzzer_lock = threading.Lock()
 
 def draw_led(stdscr, y, x, led, name, colour):
     stdscr.addstr(y, x, "(")
@@ -145,6 +145,10 @@ def draw_screen(stdscr, colours, state):
 
     draw_rgbled(stdscr, 9, 42, rgb1, "RGB-1", colours)
     draw_rgbled(stdscr, 14, 42, rgb2, "RGB-2", colours)
+
+    draw_label(stdscr, 19, 2, "B: Buzz (buzz length varies with pot value)")
+    draw_label(stdscr, 20, 2, "T: Play a (low quality) tune")
+    draw_label(stdscr, 21, 2, "Q: Quit")
     stdscr.refresh()
 
 def run_update_loop(stdscr):
@@ -169,16 +173,61 @@ def run_update_loop(stdscr):
 
     state = {}
     state["exit_requested"] = False
+    state["buzzing"] = False
 
     while not state["exit_requested"]:
         handle_input(stdscr, state)
         draw_screen(stdscr, colours, state)
         time.sleep(0.1)
 
+def buzz_buzzer(state):
+    logger.debug("Starting to buzz")
+    if buzzer_lock.acquire(blocking=False):
+        try:
+            with gpiozero.Buzzer(2) as buzzer:
+                buzzer.on()
+                time.sleep(1 - pot.value)
+                buzzer.off()
+        finally:
+            buzzer_lock.release()
+
+def play_tune(state):
+    logger.debug("Starting to play a tune")
+    if buzzer_lock.acquire(blocking=False):
+        try:
+            with gpiozero.TonalBuzzer(2) as buzzer:
+
+                l1 = ["G4", "G4", "G4", "D4", "E4", "E4", "D4"]
+                l2 = ["B4", "B4", "A4", "A4", "G4"]
+                l3 = ["D4", "G4", "G4", "G4", "D4", "E4", "E4", "D4"]
+
+                song = [l1, l2, l3, l2]
+
+                for line in song:
+                    for note in line:
+                        buzzer.play(note)
+                        time.sleep(0.4)
+                        buzzer.stop()
+                        time.sleep(0.1)
+                    time.sleep(0.2)
+
+        finally: 
+            buzzer_lock.release()
+
+def start_buzzing_buzzer(state):
+    threading.Thread(target=safe(buzz_buzzer), name="buzz buzzer", args=[state], daemon=True).start()
+
+def start_playing_tune(state):
+    threading.Thread(target=safe(play_tune), name="play tune", args=[state], daemon=True).start()
+
 def handle_input(stdscr, state):
     c = stdscr.getch()
     if c == ord("q"):
         state["exit_requested"] = True
+    elif c == ord("b"):
+        start_buzzing_buzzer(state)
+    elif c== ord("t"):
+        start_playing_tune(state)
 
 def safe(func):
     def wrapper(*args, **kwargs):
@@ -224,7 +273,7 @@ def main(stdscr):
     blue.pulse(fade_in_time=0.5, fade_out_time=0.5)
     threading.Thread(target=safe(binary_lights), name="binary", daemon=True).start()
     threading.Thread(target=safe(colour_cycle), name="colour cycle", args=[rgb1], daemon=True).start()
-    threading.Thread(target=safe(colour_switch), name="solour switch", args=[rgb2], daemon=True).start()
+    threading.Thread(target=safe(colour_switch), name="colour switch", args=[rgb2], daemon=True).start()
 
     run_update_loop(stdscr)
 
