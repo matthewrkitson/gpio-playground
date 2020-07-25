@@ -1,0 +1,39 @@
+INPUTS
+------
+Configure with pull-up resistor unless specified
+
+Item   GPIO  Notes
+-----------------------
+TILT1   9    (pull-down)
+TILT2   4
+
+B1     17
+B2     27
+B3     22
+
+LDR    10
+POT    11
+
+S1     13
+S2      6
+S3      5
+
+
+OUTPUTS
+-------
+
+BUZZER   2
+
+LED1    14
+LED2    18
+LED3    23
+LED4    19
+LED5     8
+
+O1      15
+O2       2
+O3      24
+O4       7
+
+RGB1  12, 25, 26
+RGB2  20, 21, 16
